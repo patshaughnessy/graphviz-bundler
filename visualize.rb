@@ -6,12 +6,10 @@ require 'graphviz'
 class AssociationsGraph
 
   def generate_one(gems, file_name)
-    puts 'Generating graph...'
     graph_viz = GraphViz::new('Gemfile', {:concentrate => true, :normalize => true, :nodesep => 0.55})
     graph_viz.edge[:fontname] = graph_viz.node[:fontname] = 'Arial, Helvetica, SansSerif'
     graph_viz.edge[:fontsize] = 12
-
-    nodes = {}
+    graph_viz.edge[:arrowhead] = 'none'
 
     activated_nodes = []
     activated_nodes[0] = graph_viz.add_node('Activated', { :shape => 'box3d', :fontsize => 16, :style => 'filled', :fillcolor => '#B9B9D5'} )
@@ -23,22 +21,36 @@ class AssociationsGraph
       activated_count += 1
     end
 
+    requirement_nodes = []
+    requirement_nodes[0] = graph_viz.add_node('Requirements', { :shape => 'box3d', :fontsize => 16, :style => 'filled', :fillcolor => '#B9B9D5'} )
+
+    requirement_count = 1
+    gems[:requirements].each do |gem|
+      requirement_nodes[requirement_count] = graph_viz.add_node(gem, { :fontsize => 16, :style => 'filled', :fillcolor => '#FFFFFF'} )
+      graph_viz.add_edge( requirement_nodes[requirement_count-1], requirement_nodes[requirement_count], { :weight => 2 } )
+      requirement_count += 1
+    end
+
+    graph_viz.output( :png => file_name )
+  end
+
+  def generate_two(gems, file_name)
+
+    graph_viz = GraphViz::new('Gemfile', {:concentrate => true, :normalize => true, :nodesep => 0.55})
+    graph_viz.edge[:fontname] = graph_viz.node[:fontname] = 'Arial, Helvetica, SansSerif'
+    graph_viz.edge[:fontsize] = 12
+
     dependency_nodes = []
-    dependency_nodes[0] = graph_viz.add_node(gems[:attempting][0], { :shape => 'box3d', :fontsize => 16, :style => 'filled', :fillcolor => '#B9B9D5'} )
+    dependency_nodes[0] = graph_viz.add_node("Try: #{gems[:activating][0]}", { :shape => 'box3d', :fontsize => 16, :style => 'filled', :fillcolor => '#B9B9D5'} )
 
     dependency_count = 1
     gems[:dependencies].each do |gem|
-      dependency_nodes[dependency_count] = graph_viz.add_node(gem, { :fontsize => 16, :style => 'filled', :fillcolor => '#FFFFFF'} )
-      graph_viz.add_edge( dependency_nodes[dependency_count-1], dependency_nodes[dependency_count], { :weight => 2 } )
+      dependency_nodes[dependency_count] = graph_viz.add_node("Dependency:\n#{gem}", { :fontsize => 16, :style => 'filled', :fillcolor => '#FFFFFF'} )
+      graph_viz.add_edge( dependency_nodes[0], dependency_nodes[dependency_count], { :weight => 2 } )
       dependency_count += 1
     end
 
     graph_viz.output( :png => file_name )
-
-    puts 'Done.'
-  end
-
-  def generate_two(gems, file_name)
   end
 
   def initialize
@@ -64,8 +76,10 @@ class AssociationsGraph
         type = :requirements
       when /Attempting:/
         type = :attempting
-      when /Activating:/
+      when /Activating:\s(.*)$/
         type = :activating
+        gems[type] << $1
+        puts "DEBUG added activating #{$1}"
       when /Dependencies/
         type = :dependencies
       else
@@ -84,7 +98,7 @@ end
 
 iteration_lines = []
 grapher = AssociationsGraph.new
-File.open(BUNDLER_DEBUG_OUTPUT).each do |line|
+File.open(ARGV[0]).each do |line|
   if line =~ /==== Iterating ====/
     grapher.process iteration_lines unless iteration_lines == []
     iteration_lines = []
